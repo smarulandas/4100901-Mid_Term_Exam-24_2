@@ -51,7 +51,8 @@ typedef struct {
 typedef enum {
     CMD_NONE,
     CMD_OPEN,
-    CMD_CLOSE
+    CMD_CLOSE,
+    CMD_BELL // Nuevo comando para el timbre
 } command_t;
 
 void usart2_init(void);

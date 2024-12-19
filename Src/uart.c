@@ -31,6 +31,17 @@ command_t usart2_get_command(void)
     command_t cmd = last_command;
     last_command = CMD_NONE;
     return cmd;
+    if (USART2->ISR & USART_ISR_RXNE) {
+        char rx_byte = (char)(USART2->RDR & 0xFF);
+        if (rx_byte == 'O') {
+            return CMD_OPEN;
+        } else if (rx_byte == 'C') {
+            return CMD_CLOSE;
+        } else if (rx_byte == 'B') {
+            return CMD_BELL; // Comando de timbre
+        }
+    }
+    return CMD_NONE;
 }
 
 
