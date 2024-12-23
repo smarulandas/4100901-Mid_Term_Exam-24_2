@@ -1,157 +1,127 @@
 #include "gpio.h"
 #include "rcc.h"
-
 #include "systick.h"
 
-#define EXTI_BASE 0x40010400
-#define EXTI ((EXTI_t *)EXTI_BASE)
+// Definiciones de registros y direcciones de periféricos
+#define EXTI_BASE 0x40010400 // Dirección base del controlador de interrupciones externas (EXTI)
+#define EXTI ((EXTI_t *)EXTI_BASE) // Definición para acceder a los registros del EXTI
 
+// Definición de la dirección base para el controlador de interrupciones externas (EXTI)
 #define EXTI15_10_IRQn 40
-#define NVIC_ISER1 ((uint32_t *)(0xE000E104)) // NVIC Interrupt Set-Enable Register
+#define NVIC_ISER1 ((uint32_t *)(0xE000E104)) // NVIC Interrupt Set-Enable Register (Registro para habilitar interrupciones en el NVIC)
 
+#define SYSCFG_BASE 0x40010000 // Dirección base del controlador SYSCFG
+#define SYSCFG ((SYSCFG_t *)SYSCFG_BASE) // Definición para acceder a los registros del SYSCFG
 
-#define SYSCFG_BASE 0x40010000
-#define SYSCFG ((SYSCFG_t *)SYSCFG_BASE)
+// Direcciones base para los puertos GPIOA y GPIOC
+#define GPIOA ((GPIO_t *)0x48000000) // Base address of GPIOA (Dirección base del puerto GPIOA)
+#define GPIOC ((GPIO_t *)0x48000800) // Base address of GPIOC (Dirección base del puerto GPIOC)
 
+// Definiciones de pines específicos
+#define LED_HEARTBEAT_PIN 5 // Pin 5 of GPIOA (Definición del pin 5 en GPIOA (LED de latido))
+#define BUTTON_CONTROL_PIN 13 // Pin 13 of GPIOC (Definición del pin 13 en GPIOC (botón de control)
 
-#define GPIOA ((GPIO_t *)0x48000000) // Base address of GPIOA
-#define GPIOC ((GPIO_t *)0x48000800) // Base address of GPIOC
-
-#define LED_PIN 5 // Pin 5 of GPIOA
-#define BUTTON_PIN 13 // Pin 13 of GPIOC
-#define RING_LED_PIN 6      // Pin para el LED del timbre
-
-
-
-void configure_gpio_for_usart(void)
+// Configuración del GPIO para USART
+void configurar_gpio_usart(void)
 {
-    // Enable GPIOA clock
+    // Habilitar el reloj para GPIOA
     *RCC_AHB2ENR |= (1 << 0);
 
-    // Configure PA2 (TX) as alternate function
-    GPIOA->MODER &= ~(3U << (2 * 2)); // Clear mode bits for PA2
-    GPIOA->MODER |= (2U << (2 * 2));  // Set alternate function mode for PA2
+    // Configurar PA2 como función alternativa para TX
+    GPIOA->MODER &= ~(3U << (2 * 2)); // Borra los bits de modo para PA2
+    GPIOA->MODER |= (2U << (2 * 2));  // Establece el modo de función alternativa para PA2
 
-    // Configure PA3 (RX) as alternate function
-    GPIOA->MODER &= ~(3U << (3 * 2)); // Clear mode bits for PA3
-    GPIOA->MODER |= (2U << (3 * 2));  // Set alternate function mode for PA3
+    // Configurar PA3 como función alternativa para RX
+    GPIOA->MODER &= ~(3U << (3 * 2)); // Borra los bits de modo para PA3
+    GPIOA->MODER |= (2U << (3 * 2));  // Establece el modo de función alternativa para PA3
 
-    // Set alternate function to AF7 for PA2 and PA3
-    GPIOA->AFR[0] &= ~(0xF << (4 * 2)); // Clear AFR bits for PA2
-    GPIOA->AFR[0] |= (7U << (4 * 2));   // Set AFR to AF7 for PA2
-    GPIOA->AFR[0] &= ~(0xF << (4 * 3)); // Clear AFR bits for PA3
-    GPIOA->AFR[0] |= (7U << (4 * 3));   // Set AFR to AF7 for PA3
+    // Configurar la función alternativa AF7 para PA2 y PA3
+    GPIOA->AFR[0] &= ~(0xF << (4 * 2)); // Limpia los bits AFR para PA2
+    GPIOA->AFR[0] |= (7U << (4 * 2));   // Establece AFR a AF7 para PA2
+    GPIOA->AFR[0] &= ~(0xF << (4 * 3)); // Limpia los bits AFR para PA3
+    GPIOA->AFR[0] |= (7U << (4 * 3));   // Establece AFR a AF7 para PA3
 
-    // Configure PA2 and PA3 as very high speed
-    GPIOA->OSPEEDR |= (3U << (2 * 2)); // Very high speed for PA2
-    GPIOA->OSPEEDR |= (3U << (3 * 2)); // Very high speed for PA3
+    // Configurar PA2 y PA3 con velocidad muy alta
+    GPIOA->OSPEEDR |= (3U << (2 * 2)); // Velocidad alta para PA2
+    GPIOA->OSPEEDR |= (3U << (3 * 2)); // Velocidad alta para PA3
 
-    // Configure PA2 and PA3 as no pull-up, no pull-down
-    GPIOA->PUPDR &= ~(3U << (2 * 2)); // No pull-up, no pull-down for PA2
-    GPIOA->PUPDR &= ~(3U << (3 * 2)); // No pull-up, no pull-down for PA3
+    // Configurar PA2 y PA3 sin resistencias pull-up ni pull-down
+    GPIOA->PUPDR &= ~(3U << (2 * 2)); // Sin resistencias pull-up ni pull-down para PA2
+    GPIOA->PUPDR &= ~(3U << (3 * 2)); // Sin resistencias pull-up ni pull-down para PA3
 }
 
-
-void configure_gpio(void)
+// Configuración general de GPIO
+void configurar_gpio(void)
 {
-    //Codigo mio
+   // Habilitar el reloj para GPIOA y GPIOC
+   *RCC_AHB2ENR |= (1 << 0) | (1 << 2);
 
-    // Habilitar relojes para GPIOA y GPIOC
-    *RCC_AHB2ENR |= (1 << 0);  // GPIOA clock
-    *RCC_AHB2ENR |= (1 << 2);  // GPIOC clock
-    
-    // Configurar PA4 (LED de estado de puerta) como salida
-    GPIOA->MODER &= ~(3U << (4 * 2));  // Limpiar bits de modo
-    GPIOA->MODER |= (1U << (4 * 2));   // Configurar como salida
-    GPIOA->OTYPER &= ~(1 << 4);        // Push-pull
-    GPIOA->OSPEEDR |= (3U << (4 * 2)); // Very high speed
-    GPIOA->PUPDR &= ~(3U << (4 * 2));  // No pull-up/pull-down
-    
-    // Configurar PA5 (LED de heartbeat) como salida
-    GPIOA->MODER &= ~(3U << (5 * 2));  // Limpiar bits de modo
-    GPIOA->MODER |= (1U << (5 * 2));   // Configurar como salida
-    GPIOA->OTYPER &= ~(1 << 5);        // Push-pull
-    GPIOA->OSPEEDR |= (3U << (5 * 2)); // Very high speed
-    GPIOA->PUPDR &= ~(3U << (5 * 2));  // No pull-up/pull-down
-    
-    // Configurar PC13 (Botón) como entrada con interrupción
-    GPIOC->MODER &= ~(3U << (13 * 2)); // Modo entrada (00)
-    GPIOC->PUPDR |= (1U << (13 * 2));  // Pull-up
-    
-    // Habilitar SYSCFG clock (necesario para EXTI)
-    *RCC_APB2ENR |= (1 << 0);
-    
-    // Conectar EXTI13 a PC13
-    SYSCFG->EXTICR[3] &= ~(0xF << 4);  // Limpiar bits EXTI13
-    SYSCFG->EXTICR[3] |= (2 << 4);     // PC13 como fuente
-    
-    // Configurar EXTI para flanco descendente
-    EXTI->FTSR1 |= (1 << BUTTON_PIN);  // Habilitar trigger por flanco descendente
-    EXTI->RTSR1 &= ~(1 << BUTTON_PIN); // Deshabilitar trigger por flanco ascendente
-    EXTI->IMR1 |= (1 << BUTTON_PIN);   // Habilitar interrupción
-    EXTI->PR1 = (1 << BUTTON_PIN);     // Limpiar cualquier interrupción pendiente
+    // Configurar PA5 como salida para el LED
+    GPIOA->MODER &= ~(3U << (LED_HEARTBEAT_PIN * 2)); // Borra los bits de modo para PA5
+    GPIOA->MODER |= (1U << (LED_HEARTBEAT_PIN * 2));  // Configura como salida para PA5
 
-    
-    // Habilitar interrupción EXTI en NVIC
+    // Configurar PC13 como entrada para el botón
+    GPIOC->MODER &= ~(3U << (BUTTON_CONTROL_PIN * 2)); // Borra los bits de modo para PC13
+
+    // Habilitar el reloj para SYSCFG
+    *RCC_APB2ENR |= (1 << 0); // Habilita SYSCFG
+
+    // Configurar SYSCFG EXTICR para mapear EXTI13 a PC13
+    SYSCFG->EXTICR[3] &= ~(0xF << 4); // Limpia los bits para EXTI13
+    SYSCFG->EXTICR[3] |= (0x2 << 4);  // Asigna EXTI13 al puerto C
+
+    // Configurar EXTI13 para activarse en el flanco de bajada
+    EXTI->FTSR1 |= (1 << BUTTON_CONTROL_PIN);  // Habilita disparo por flanco de bajada
+    EXTI->RTSR1 &= ~(1 << BUTTON_CONTROL_PIN); // Deshabilita disparo por flanco de subida
+
+    // Desenmascarar EXTI13 para habilitar la interrupción
+    EXTI->IMR1 |= (1 << BUTTON_CONTROL_PIN);
+
+    // Habilitar la interrupción EXTI15_10 en el NVIC
     *NVIC_ISER1 |= (1 << (EXTI15_10_IRQn - 32));
-
-    GPIOA->MODER &= ~(3U << (RING_LED_PIN * 2));  // Limpiar bits de modo
-    GPIOA->MODER |= (1U << (RING_LED_PIN * 2));   // Configurar como salida
-    GPIOA->OTYPER &= ~(1 << RING_LED_PIN);        // Push-pull
-    GPIOA->OSPEEDR |= (3U << (RING_LED_PIN * 2)); // Very high speed
-    GPIOA->PUPDR &= ~(3U << (RING_LED_PIN * 2));  // No pull-up/pull-down
-
-    //Hasta aqui, por si se daña saber que hice
 }
 
-    void gpio_set_bell_event(uint8_t state) {
-    if (state) {
-        usart2_send_string("BELL_RING\r\n"); // Notificar el evento del timbre
-    }
-}
-
-// Emula el comprtamiento de la puerta
-void gpio_set_door_led_state(uint8_t state) {
-    if (state) {
-        GPIOA->ODR |= (1 << 4); // encender LED estado puerta
+// Control del estado del LED de la puerta
+void cambiar_estado_led_puerta(uint8_t estado) {
+    if (estado) {
+        GPIOA->ODR |= (1 << 4); // Enciende el LED de estado de puerta
     } else {
-        GPIOA->ODR &= ~(1 << 4); // apagar LED estado puerta
-    }
-    if (state) {
-        GPIOA->ODR |= (1 << RING_LED_PIN); // Encender LED del timbre
-    } else {
-        GPIOA->ODR &= ~(1 << RING_LED_PIN); // Apagar LED del timbre
+        GPIOA->ODR &= ~(1 << 4); // Apaga el LED de estado de puerta
     }
 }
 
-void gpio_toggle_heartbeat_led(void) {
+// Alterna el estado del LED de latido
+void alternar_led_latido(void) {
     GPIOA->ODR ^= (1 << 5);
 }
 
-volatile uint8_t button_pressed = 0; // Flag to indicate button press
-uint8_t button_driver_get_event(void)
+volatile uint8_t boton_presionado = 0; // Variable para indicar si el botón fue presionado
+uint8_t obtener_evento_boton(void)
 {
-    return button_pressed;
+    uint8_t evento = boton_presionado;
+    boton_presionado = 0;
+    return evento;
 }
 
-uint32_t b1_tick = 0;
-void detect_button_press(void)
+uint32_t tiempo_boton = 0;
+void detectar_presion_boton(void)
 {
-    if (systick_GetTick() - b1_tick < 50) {
-        return; // Ignore bounces of less than 50 ms
-    } else if (systick_GetTick() - b1_tick > 500) {
-        button_pressed = 1; // single press
+    if (systick_GetTick() - tiempo_boton < 50) {
+        return; // Ignora rebotes menores a 50 ms
+    } else if (systick_GetTick() - tiempo_boton > 500) {
+        boton_presionado = 1; // Presión simple
     } else {
-        button_pressed = 2; // double press
+        boton_presionado = 2; // Presión doble
     }
 
-    b1_tick = systick_GetTick();
+    tiempo_boton = systick_GetTick();
 }
 
+// Manejo de la interrupción EXTI para el botón
 void EXTI15_10_IRQHandler(void)
 {
-    if (EXTI->PR1 & (1 << BUTTON_PIN)) {
-        EXTI->PR1 = (1 << BUTTON_PIN); // Clear pending bit
-        detect_button_press();
+    if (EXTI->PR1 & (1 << BUTTON_CONTROL_PIN)) {
+        EXTI->PR1 = (1 << BUTTON_CONTROL_PIN); // Borra el bit pendiente
+        detectar_presion_boton();
     }
 }

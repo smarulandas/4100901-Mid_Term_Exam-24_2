@@ -54,12 +54,7 @@ void gpio_toggle_heartbeat_led(void);
 // Lectura de botones (simple/doble pulsación se maneja en otra capa)
 uint8_t button_driver_get_event(void);
 
-extern volatile uint8_t button_pressed;
 
 void configure_gpio_for_usart(void);
 
-void gpio_set_ring_led_state(uint8_t state); // Control del LED del timbre
-void gpio_set_bell_event(uint8_t state);    // Control del timbre (eventos por UART)
-
 #endif // GPIO_H
-
